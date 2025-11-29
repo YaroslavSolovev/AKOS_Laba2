@@ -1,0 +1,27 @@
+# Claude Code папка
+.claude/
+
+# Python кэш
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Виртуальное окружение
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Файл обмена данными
+shared_communication.txt
+
+# OS
+.DS_Store
+Thumbs.db
