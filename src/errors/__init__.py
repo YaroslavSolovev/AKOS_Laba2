@@ -1,7 +1,4 @@
-"""
-Пакет классов исключений для системы межпроцессного взаимодействия.
-Каждый класс исключения в отдельном файле.
-"""
+# Все ошибки в одном месте
 
 from src.errors.communication_error import CommunicationError
 from src.errors.file_access_error import FileAccessError

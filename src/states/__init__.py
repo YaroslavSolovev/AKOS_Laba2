@@ -1,7 +1,4 @@
-"""
-Пакет перечислений состояний для клиента и сервера.
-Каждый Enum в отдельном файле.
-"""
+# Все состояния в одном месте
 
 from src.states.client_state import ClientState
 from src.states.server_state import ServerState

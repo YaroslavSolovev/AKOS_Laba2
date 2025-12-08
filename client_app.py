@@ -1,16 +1,11 @@
-"""
-Точка входа для клиентского приложения.
-Демонстрирует использование PingPongClient для отправки ping-запросов.
-"""
+# Запуск клиента
 
 import time
 import sys
-
 from src.client import PingPongClient
 
 
 def main():
-    """Главная функция для запуска клиента."""
     print("=" * 60)
     print("PING-PONG CLIENT")
     print("=" * 60)
@@ -18,7 +13,7 @@ def main():
     client = PingPongClient(shared_file="shared_communication.txt", timeout=30)
 
     try:
-        # Отправка нескольких ping-запросов
+        # Отправляем несколько ping-запросов
         num_pings = 5
         successful = 0
 

@@ -1,7 +1,4 @@
-"""
-ООП-реализация сервера для ping-pong взаимодействия.
-Сервер ожидает запросы, обрабатывает их и отправляет ответы.
-"""
+# Сервер для обработки ping-pong запросов через файл
 
 import time
 from datetime import datetime
@@ -15,60 +12,32 @@ from src.errors import (
     InvalidRequestError
 )
 
-
 class PingPongServer(BaseCommunicator):
-    """
-    Сервер для ping-pong взаимодействия через файл-дескриптор.
-
-    Состояния:
-    1. WAITING_REQUEST - ожидание запроса
-    1.1. PROCESSING_REQUEST - обработка запроса
-    1.2. ERROR - обработка ошибки
-    2. SENDING_RESPONSE - отправка ответа
-    """
+    # Класс сервера - ждет запросы, обрабатывает и отвечает
 
     def __init__(self, shared_file: str = "shared_communication.txt", poll_interval: float = 0.1):
-        """
-        Инициализация сервера.
-
-        Args:
-            shared_file: Путь к общему файлу для взаимодействия
-            poll_interval: Интервал опроса файла в секундах
-        """
+        # Инициализация сервера
         super().__init__(shared_file)
-        self.poll_interval = poll_interval
-        self.state = ServerState.IDLE
-        self.running = False
-        self.requests_processed = 0
-        self.last_request_id = None
+        self.poll_interval = poll_interval  # как часто проверяем файл
+        self.state = ServerState.IDLE  # начальное состояние
+        self.running = False  # флаг работы
+        self.requests_processed = 0  # счетчик запросов
+        self.last_request_id = None  # для проверки дубликатов
 
     def _change_state(self, new_state: ServerState):
-        """
-        Изменение состояния сервера с логированием.
-
-        Args:
-            new_state: Новое состояние сервера
-        """
+        # Меняем состояние и логируем
         self._log(f"State transition: {self.state.value} -> {new_state.value}")
         self.state = new_state
 
     def wait_for_request(self) -> Optional[str]:
-        """
-        Шаг 1: Ожидание запроса от клиента.
-
-        Returns:
-            Содержимое запроса или None если файл не существует/пуст
-
-        Raises:
-            FileAccessError: При ошибке чтения файла
-        """
+        # Ждем запрос от клиента
         self._change_state(ServerState.WAITING_REQUEST)
 
         content = self._read_file()
         if not content:
             return None
 
-        # Проверка что это запрос от клиента
+        # Проверяем что это именно запрос от клиента
         if content.startswith("CLIENT_REQUEST"):
             self._log(f"Request detected: {content}")
             return content
@@ -76,25 +45,16 @@ class PingPongServer(BaseCommunicator):
         return None
 
     def process_request(self, request: str) -> dict:
-        """
-        Шаг 1.1: Обработка запроса.
-
-        Args:
-            request: Строка запроса от клиента
-
-        Returns:
-            Словарь с разобранными данными запроса
-
-        Raises:
-            InvalidRequestError: При неверном формате запроса
-        """
+        # Обрабатываем запрос - разбираем и проверяем формат
         self._change_state(ServerState.PROCESSING_REQUEST)
         self._log(f"Processing request: {request}")
 
         try:
-            # Формат: CLIENT_REQUEST|ping|request_id|timestamp
+            # Разбиваем строку по разделителю |
+            # Ожидаемый формат: CLIENT_REQUEST|ping|request_id|timestamp
             parts = request.split("|")
 
+            # Проверяем что все части на месте
             if len(parts) < 4:
                 raise InvalidRequestError(f"Invalid request format: expected 4 parts, got {len(parts)}")
 
@@ -104,6 +64,7 @@ class PingPongServer(BaseCommunicator):
             if parts[1] != "ping":
                 raise InvalidRequestError(f"Expected 'ping' message, got: {parts[1]}")
 
+            # Собираем данные в словарь
             request_data = {
                 'type': parts[0],
                 'message': parts[1],
@@ -111,7 +72,7 @@ class PingPongServer(BaseCommunicator):
                 'timestamp': parts[3]
             }
 
-            # Проверка на дублирование запроса
+            # Проверяем на дубликаты
             if self.last_request_id == request_data['request_id']:
                 self._log(f"Duplicate request detected: {request_data['request_id']}")
                 request_data['duplicate'] = True
@@ -126,89 +87,62 @@ class PingPongServer(BaseCommunicator):
             raise InvalidRequestError(f"Failed to parse request: {e}")
 
     def create_response(self, request_data: dict) -> str:
-        """
-        Создание ответа pong на запрос ping.
-
-        Args:
-            request_data: Разобранные данные запроса
-
-        Returns:
-            Строка ответа в формате "SERVER_RESPONSE|pong|request_id|timestamp"
-        """
+        # Создаем ответ pong на ping
         response_timestamp = datetime.now().isoformat()
         response = f"SERVER_RESPONSE|pong|{request_data['request_id']}|{response_timestamp}"
         self._log(f"Created response: {response}")
         return response
 
     def send_response(self, response: str):
-        """
-        Шаг 2: Отправка ответа клиенту.
-
-        Args:
-            response: Строка ответа для отправки
-
-        Raises:
-            FileAccessError: При ошибке записи в файл
-        """
+        # Отправляем ответ клиенту (записываем в файл)
         self._change_state(ServerState.SENDING_RESPONSE)
         self._write_file(response)
         self._log(f"Response sent to file: {self.shared_file}")
         self.requests_processed += 1
 
     def handle_error(self, error: Exception):
-        """
-        Шаг 1.2: Обработка ошибки.
-
-        Args:
-            error: Исключение, которое произошло
-        """
+        # Обрабатываем ошибки
         self._change_state(ServerState.ERROR)
         self._log(f"ERROR: {type(error).__name__}: {error}")
 
-        # Попытка очистить файл при ошибке
+        # Пытаемся очистить файл после ошибки
         try:
             self._clear_file()
         except FileAccessError:
             self._log("Warning: Failed to clear file after error")
 
     def process_single_request(self) -> bool:
-        """
-        Обработка одного запроса (полный цикл).
-
-        Returns:
-            True если запрос был обработан, False если запросов нет
-        """
+        # Обрабатываем один запрос от начала до конца
         try:
-            # 1. Ожидание запроса
+            # Ждем запрос
             request = self.wait_for_request()
 
             if request is None:
                 return False
 
-            # 1.1. Обработка запроса
+            # Парсим запрос
             request_data = self.process_request(request)
 
-            # Пропуск дубликатов
+            # Если дубликат - пропускаем
             if request_data.get('duplicate', False):
                 self._log("Skipping duplicate request")
                 return False
 
-            # Создание ответа
+            # Создаем ответ
             response = self.create_response(request_data)
 
-            # Небольшая задержка для имитации обработки
+            # Небольшая задержка (типа думаем)
             time.sleep(0.05)
 
-            # 2. Отправка ответа
+            # Отправляем ответ
             self.send_response(response)
 
-            # Успех
+            # Готово!
             self._change_state(ServerState.COMPLETED)
             self._log("Request-response cycle completed successfully")
             return True
 
         except CommunicationError as e:
-            # 1.2. Обработка ошибки
             self.handle_error(e)
             return False
         except Exception as e:
@@ -216,12 +150,7 @@ class PingPongServer(BaseCommunicator):
             return False
 
     def start(self, max_requests: Optional[int] = None):
-        """
-        Запуск сервера в режиме ожидания запросов.
-
-        Args:
-            max_requests: Максимальное количество запросов для обработки (None = бесконечно)
-        """
+        # Запускаем сервер
         self._log("Starting server...")
         self._log(f"Shared file: {self.shared_file}")
         self._log(f"Poll interval: {self.poll_interval}s")
@@ -232,20 +161,20 @@ class PingPongServer(BaseCommunicator):
         self.running = True
         self.requests_processed = 0
 
-        # Очистка файла при запуске
+        # Удаляем старый файл если есть
         self._remove_file()
 
         try:
             while self.running:
-                # Обработка запроса если он есть
+                # Пытаемся обработать запрос
                 processed = self.process_single_request()
 
-                # Проверка лимита запросов
+                # Если достигли лимита - выходим
                 if max_requests and self.requests_processed >= max_requests:
                     self._log(f"Reached maximum requests limit: {max_requests}")
                     break
 
-                # Если запрос не был обработан, переход в режим ожидания
+                # Если запроса не было - ждем
                 if not processed:
                     self._change_state(ServerState.WAITING_REQUEST)
                     time.sleep(self.poll_interval)
@@ -256,7 +185,7 @@ class PingPongServer(BaseCommunicator):
             self.stop()
 
     def stop(self):
-        """Остановка сервера и очистка ресурсов."""
+        # Останавливаем сервер и чистим за собой
         self._log("Stopping server...")
         self.running = False
         self._remove_file()

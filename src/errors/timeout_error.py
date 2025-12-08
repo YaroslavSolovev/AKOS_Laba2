@@ -1,10 +1,8 @@
-"""
-Класс ошибки таймаута при ожидании ответа.
-"""
+# Ошибка таймаута
 
 from src.errors.communication_error import CommunicationError
 
 
 class TimeoutError(CommunicationError):
-    """Ошибка таймаута при ожидании ответа."""
+    # Превышено время ожидания ответа
     pass
