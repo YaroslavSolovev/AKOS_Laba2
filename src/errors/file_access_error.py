@@ -1,8 +1,10 @@
-# Ошибка доступа к файлу
+"""
+Класс ошибки доступа к файлу.
+"""
 
 from src.errors.communication_error import CommunicationError
 
 
 class FileAccessError(CommunicationError):
-    # Проблемы с чтением/записью файла
+    """Ошибка доступа к общему файлу."""
     pass

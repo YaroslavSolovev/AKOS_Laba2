@@ -1,7 +1,9 @@
-# Клиент для отправки ping-запросов
+"""
+ООП-реализация клиента для ping-pong взаимодействия.
+Клиент создает запросы, ожидает ответы и обрабатывает ошибки.
+"""
 
 import time
-from datetime import datetime
 from typing import Optional
 
 from src.base_communicator import BaseCommunicator
@@ -15,119 +17,153 @@ from src.errors import (
 
 
 class PingPongClient(BaseCommunicator):
-    # Класс клиента - отправляет запросы и ждет ответы
+    """
+    Клиент для ping-pong взаимодействия через файл-дескриптор.
+
+    Состояния:
+    1. CREATING_REQUEST - создание запроса
+    2. WAITING_RESPONSE - ожидание ответа
+    3. READING_RESPONSE - чтение ответа
+    4. ERROR - обработка ошибки
+    """
 
     def __init__(self, shared_file: str = "shared_communication.txt", timeout: int = 30):
-        # Инициализация клиента
+        """
+        Инициализация клиента.
+
+        Args:
+            shared_file: Путь к общему файлу для взаимодействия
+            timeout: Таймаут ожидания ответа в секундах
+        """
         super().__init__(shared_file)
-        self.timeout = timeout  # таймаут ожидания ответа
-        self.state = ClientState.IDLE  # начальное состояние
-        self.request_id = 0  # счетчик запросов
-        self.max_retries = 3  # макс попыток при ошибке
+        self.timeout = timeout
+        self.state = ClientState.IDLE
 
     def _change_state(self, new_state: ClientState):
-        # Меняем состояние и логируем
-        self._log(f"State transition: {self.state.value} -> {new_state.value}")
+        """
+        Изменение состояния клиента.
+
+        Args:
+            new_state: Новое состояние клиента
+        """
         self.state = new_state
 
-    def create_request(self) -> str:
-        # Создаем ping-запрос
+    def create_request(self, message: str = "ping") -> str:
+        """
+        Создание запроса.
+
+        Args:
+            message: Сообщение для отправки (по умолчанию "ping")
+
+        Returns:
+            Строка запроса
+        """
         self._change_state(ClientState.CREATING_REQUEST)
-        self.request_id += 1
-        timestamp = datetime.now().isoformat()
-        request = f"CLIENT_REQUEST|ping|{self.request_id}|{timestamp}"
-        self._log(f"Created request: {request}")
-        return request
+        return message
 
     def send_request(self, request: str):
-        # Отправляем запрос (пишем в файл)
-        self._write_file(request)
-        self._log(f"Request sent to file: {self.shared_file}")
+        """
+        Отправка запроса в общий файл.
 
-    def wait_for_response(self) -> bool:
-        # Ждем ответ от сервера
+        Args:
+            request: Строка запроса для отправки
+
+        Raises:
+            FileAccessError: При ошибке записи в файл
+        """
+        self._write_file(request)
+        self._log(f"> {request}")
+
+    def wait_for_response(self, sent_request: str) -> bool:
+        """
+        Ожидание ответа от сервера.
+
+        Args:
+            sent_request: Запрос который был отправлен (чтобы не читать его же)
+
+        Returns:
+            True если ответ появился, False если таймаут
+
+        Raises:
+            TimeoutError: При истечении таймаута
+        """
         self._change_state(ClientState.WAITING_RESPONSE)
-        self._log(f"Waiting for response (timeout: {self.timeout}s)...")
 
         start_time = time.time()
         while time.time() - start_time < self.timeout:
             try:
                 content = self._read_file()
-                if content and content.startswith("SERVER_RESPONSE"):
-                    self._log("Response detected in file")
+                # Ждем пока содержимое изменится (не равно нашему запросу)
+                if content and content.strip() and content.strip() != sent_request.strip():
                     return True
             except FileAccessError:
-                pass  # файл может быть занят сервером
+                pass  # Файл может быть заблокирован сервером
 
-            time.sleep(0.1)  # небольшая пауза
+            time.sleep(0.1)
 
-        raise TimeoutError(f"No response received within {self.timeout} seconds")
+        raise TimeoutError(f"Нет ответа ({self.timeout}s)")
 
     def read_response(self) -> str:
-        # Читаем и проверяем ответ от сервера
+        """
+        Чтение ответа от сервера.
+
+        Returns:
+            Содержимое ответа от сервера
+
+        Raises:
+            FileAccessError: При ошибке чтения файла
+            InvalidResponseError: При неверном формате ответа
+        """
         self._change_state(ClientState.READING_RESPONSE)
 
         response = self._read_file()
         if not response:
-            raise InvalidResponseError("Empty response from server")
+            raise InvalidResponseError("Пустой ответ")
 
-        self._log(f"Read response: {response}")
+        # Если это ошибка от сервера - выбрасываем исключение
+        if response.startswith("ERROR:"):
+            error_msg = response.replace("ERROR:", "").strip()
+            raise InvalidResponseError(f"Сервер: {error_msg}")
 
-        # Проверяем формат ответа
-        if not response.startswith("SERVER_RESPONSE"):
-            raise InvalidResponseError(f"Invalid response format: {response}")
-
-        parts = response.split("|")
-        if len(parts) < 4 or parts[1] != "pong":
-            raise InvalidResponseError(f"Expected 'pong' response, got: {response}")
-
+        self._log(f"< {response}")
         return response
 
-    def handle_error(self, error: Exception, retry_count: int = 0) -> bool:
-        # Обрабатываем ошибку и решаем повторять ли попытку
-        self._change_state(ClientState.ERROR)
-        self._log(f"ERROR: {type(error).__name__}: {error}")
+    def handle_error(self, error: Exception):
+        """
+        Обработка ошибки.
 
-        if retry_count < self.max_retries:
-            self._log(f"Retry {retry_count + 1}/{self.max_retries}")
-            time.sleep(1)  # пауза перед повтором
-            return True
-        else:
-            self._log("Max retries reached. Giving up.")
-            return False
+        Args:
+            error: Исключение, которое произошло
+        """
+        self._change_state(ClientState.ERROR)
+        self._log(f"Ошибка: {error}")
 
     def cleanup(self):
-        # Чистим файл после завершения
+        """Очистка общего файла после завершения."""
         self._remove_file()
 
-    def send_ping(self) -> Optional[str]:
-        # Главный метод - полный цикл ping-pong
-        retry_count = 0
+    def send_message(self, message: str) -> Optional[str]:
+        """
+        Отправка сообщения и получение ответа.
 
-        while retry_count <= self.max_retries:
-            try:
-                # Создаем запрос
-                request = self.create_request()
+        Args:
+            message: Сообщение для отправки
 
-                # Отправляем
-                self.send_request(request)
+        Returns:
+            Ответ от сервера или None при ошибке
+        """
+        try:
+            # Создание и отправка запроса
+            request = self.create_request(message)
+            self.send_request(request)
 
-                # Ждем ответ
-                self.wait_for_response()
+            # Ожидание и чтение ответа (передаем запрос чтобы не читать его же)
+            self.wait_for_response(request)
+            response = self.read_response()
 
-                # Читаем ответ
-                response = self.read_response()
+            self._change_state(ClientState.COMPLETED)
+            return response
 
-                # Готово!
-                self._change_state(ClientState.COMPLETED)
-                self._log("Ping-pong cycle completed successfully")
-                return response
-
-            except (CommunicationError, Exception) as e:
-                # Если ошибка - пытаемся повторить
-                should_retry = self.handle_error(e, retry_count)
-                if not should_retry:
-                    return None
-                retry_count += 1
-
-        return None
+        except (CommunicationError, Exception) as e:
+            self.handle_error(e)
+            return None

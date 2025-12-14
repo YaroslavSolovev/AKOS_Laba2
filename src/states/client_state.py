@@ -1,13 +1,24 @@
-# Состояния клиента для ping-pong
+"""
+Перечисление состояний клиента.
+Реализует диаграмму состояний для клиента в ping-pong взаимодействии.
+"""
 
 from enum import Enum
 
 
 class ClientState(Enum):
-    # Возможные состояния работы клиента
-    IDLE = "idle"  # ничего не делаем
-    CREATING_REQUEST = "creating_request"  # создаем запрос
-    WAITING_RESPONSE = "waiting_response"  # ждем ответа
-    READING_RESPONSE = "reading_response"  # читаем ответ
-    ERROR = "error"  # если ошибка
-    COMPLETED = "completed"  # все готово
+    """
+    Состояния клиента согласно диаграмме состояний.
+
+    Переходы:
+    IDLE -> CREATING_REQUEST -> WAITING_RESPONSE -> READING_RESPONSE -> COMPLETED
+                                      |                    |
+                                      v                    v
+                                   ERROR <--------------- ERROR
+    """
+    IDLE = "idle"
+    CREATING_REQUEST = "creating_request"
+    WAITING_RESPONSE = "waiting_response"
+    READING_RESPONSE = "reading_response"
+    ERROR = "error"
+    COMPLETED = "completed"

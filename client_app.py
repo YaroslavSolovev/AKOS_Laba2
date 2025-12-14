@@ -1,44 +1,50 @@
-# Запуск клиента
+"""
+Клиентское приложение для ping-pong взаимодействия.
+Интерактивный режим: пользователь вводит сообщения в консоли.
+"""
 
-import time
 import sys
 from src.client import PingPongClient
 
 
 def main():
+    """Главная функция для запуска клиента."""
     print("=" * 60)
     print("PING-PONG CLIENT")
+    print("Введите 'ping' для отправки запроса")
+    print("Введите 'exit' или 'quit' для выхода")
     print("=" * 60)
 
-    client = PingPongClient(shared_file="shared_communication.txt", timeout=30)
+    client = PingPongClient(shared_file="shared_communication.txt", timeout=10)
 
     try:
-        # Отправляем несколько ping-запросов
-        num_pings = 5
-        successful = 0
+        while True:
+            # Ввод от пользователя
+            user_input = input("\n> ").strip()
 
-        for i in range(num_pings):
-            print(f"\n--- Ping #{i+1}/{num_pings} ---")
-            response = client.send_ping()
+            # Проверка команды выхода
+            if user_input.lower() in ['exit', 'quit', 'q']:
+                print("Выход...")
+                break
+
+            # Если пустая строка - пропускаем
+            if not user_input:
+                continue
+
+            # Отправка сообщения
+            response = client.send_message(user_input)
 
             if response:
-                successful += 1
-                print(f"SUCCESS: Received response: {response}")
+                # Ответ получен успешно (уже выведен в логах)
+                pass
             else:
-                print(f"FAILED: No response received")
-
-            if i < num_pings - 1:
-                print("Waiting 2 seconds before next ping...")
-                time.sleep(2)
-
-        print(f"\n{'=' * 60}")
-        print(f"Results: {successful}/{num_pings} successful")
-        print(f"{'=' * 60}")
+                # Не удалось получить ответ
+                pass
 
     except KeyboardInterrupt:
-        print("\n\nInterrupted by user")
+        print("\n\nПрервано пользователем")
     except Exception as e:
-        print(f"\nFATAL ERROR: {e}")
+        print(f"\nОшибка: {e}")
         sys.exit(1)
     finally:
         client.cleanup()
